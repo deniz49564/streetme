@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "182511782514",
+    "project_id": "streetme-b19f5",
+    "storage_bucket": "streetme-b19f5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:182511782514:android:3e6cdcee791272fa0510eb",
+        "android_client_info": {
+          "package_name": "com.streetme.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDllLcK03gZxVtbVVGbeqVI0M5rHv-vSNA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

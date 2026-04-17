@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/white">
+
+    <androidx.appcompat.widget.Toolbar
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/primary">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <ImageView
+                android:id="@+id/geri_button"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_centerVertical="true"
+                android:src="@drawable/ic_back"
+                app:tint="@color/white"
+                android:padding="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:text="Profilim"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+        </RelativeLayout>
+
+    </androidx.appcompat.widget.Toolbar>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Kullanıcı Bilgileri -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Kullanıcı Bilgileri"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/primary"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
+                android:id="@+id/ad_soyad_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Ad Soyad"
+                android:textSize="16sp"
+                android:padding="12dp"
+                android:background="@drawable/bg_edittext"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/telefon_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Telefon"
+                android:textSize="16sp"
+                android:padding="12dp"
+                android:background="@drawable/bg_edittext"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/ilan_sayisi_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="İlan Sayısı: 0"
+                android:textSize="16sp"
+                android:padding="12dp"
+                android:background="@drawable/bg_edittext"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/uyelik_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Üyelik Tarihi"
+                android:textSize="16sp"
+                android:padding="12dp"
+                android:background="@drawable/bg_edittext"
+                android:layout_marginBottom="16dp" />
+
+            <!-- İlanlarım -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="İlanlarım"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/primary"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/ilanlar_recycler"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
+
+            <!-- Çıkış Butonu -->
+            <Button
+                android:id="@+id/cikis_button"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="24dp"
+                android:backgroundTint="@color/error"
+                android:text="Çıkış Yap"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

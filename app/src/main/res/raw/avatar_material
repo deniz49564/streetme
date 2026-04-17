@@ -1,0 +1,23 @@
+// Basit bir Sceneform material dosyası
+material {
+    "name" : "Avatar Material",
+    "parameters" : [
+        {
+           "type" : "sampler2d",
+           "name" : "avatarTexture"
+        }
+    ],
+    "requires" : [
+        "position",
+        "uv0"
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs materialInputs) {
+        vec4 baseColor = texture(materialParams_avatarTexture, getUV0());
+        materialInputs.baseColor = baseColor;
+        materialInputs.metallic = 0.0;
+        materialInputs.roughness = 0.4;
+    }
+}

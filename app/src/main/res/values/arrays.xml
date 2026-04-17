@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Snapchat'ten alınacak izinler -->
+    <string-array name="snap_connect_scopes">
+        <item>https://auth.snapchat.com/oauth2/api/user.display_name</item>
+        <item>https://auth.snapchat.com/oauth2/api/user.bitmoji.avatar</item>
+    </string-array>
+
+    <!-- Avatar seçenekleri (ileride kullanılacak) -->
+    <string-array name="avatar_names">
+        <item>Kırmızı Avatar</item>
+        <item>Mavi Avatar</item>
+        <item>Yeşil Avatar</item>
+        <item>Turuncu Avatar</item>
+    </string-array>
+</resources>
