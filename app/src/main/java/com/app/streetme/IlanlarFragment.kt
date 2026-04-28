@@ -15,6 +15,7 @@ import com.google.firebase.database.*
 
 class IlanlarFragment : Fragment() {
 
+    private var _binding: View? = null // View binding benzeri manuel temizlik için
     private lateinit var searchEditText: EditText
     private lateinit var kategoriSpinner: Spinner
     private lateinit var siralamaSpinner: Spinner
@@ -26,9 +27,11 @@ class IlanlarFragment : Fragment() {
     private lateinit var emptyText: TextView
     private lateinit var progressBar: ProgressBar
 
-    private val ilanListesi = arrayListOf<Ilan>()
     private val tumIlanlar = arrayListOf<Ilan>()
     private lateinit var adapter: IlanAdapter
+
+    private var dbListener: ValueEventListener? = null
+    private var dbQuery: Query? = null
 
     private val kategoriler = listOf("Tümü", "Elektronik", "Ev Eşyası", "Giyim", "Kitap", "Diğer")
     private val siralamaSecenekleri = listOf("En Yeni", "En Ucuz", "En Pahalı")
@@ -39,7 +42,8 @@ class IlanlarFragment : Fragment() {
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        return inflater.inflate(R.layout.fragment_ilanlar, container, false)
+        _binding = inflater.inflate(R.layout.fragment_ilanlar, container, false)
+        return _binding
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -48,7 +52,6 @@ class IlanlarFragment : Fragment() {
         initViews(view)
         setupSpinners()
         setupSearch()
-        setupClickListeners()
         loadIlans()
     }
 
@@ -66,25 +69,25 @@ class IlanlarFragment : Fragment() {
 
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
 
-        // DÜZELTİLDİ: IlanDetayActivity.start requireActivity() ile çağrılıyor
-        adapter = IlanAdapter(ilanListesi) { ilan ->
+        // Önemli: Optimize edilmiş ListAdapter kullanıyoruz
+        adapter = IlanAdapter { ilan ->
             IlanDetayActivity.start(requireActivity(), ilan)
         }
         recyclerView.adapter = adapter
 
-        Log.d(TAG, "Views initialized")
+        filtreleButton.setOnClickListener { filtrele() }
+        temizleButton.setOnClickListener { temizle() }
     }
 
     private fun setupSpinners() {
-        val kategoriAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, kategoriler)
-        kategoriAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        kategoriSpinner.adapter = kategoriAdapter
+        val context = context ?: return
+        val katAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, kategoriler)
+        katAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        kategoriSpinner.adapter = katAdapter
 
-        val siralamaAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, siralamaSecenekleri)
-        siralamaAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        siralamaSpinner.adapter = siralamaAdapter
-
-        Log.d(TAG, "Spinners setup")
+        val sirAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, siralamaSecenekleri)
+        sirAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        siralamaSpinner.adapter = sirAdapter
     }
 
     private fun setupSearch() {
@@ -97,68 +100,44 @@ class IlanlarFragment : Fragment() {
         })
     }
 
-    private fun setupClickListeners() {
-        filtreleButton.setOnClickListener { filtrele() }
-        temizleButton.setOnClickListener { temizle() }
-    }
-
     private fun loadIlans() {
+        if (!isAdded) return // Fragment hala ekranda mı kontrolü
+
         progressBar.visibility = View.VISIBLE
-        Log.d(TAG, "Loading ilans...")
+        dbQuery = FirebaseDatabase.getInstance(DATABASE_URL).reference.child("ilans")
+            .orderByChild("durum").equalTo("aktif")
 
-        val dbRef = FirebaseDatabase.getInstance(DATABASE_URL).reference
+        dbListener = dbQuery?.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!isAdded) return
 
-        dbRef.child("ilans").orderByChild("durum").equalTo("aktif")
-            .addValueEventListener(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    Log.d(TAG, "DataSnapshot children count: ${snapshot.children.count()}")
-                    tumIlanlar.clear()
-
-                    for (ilanSnapshot in snapshot.children) {
-                        val ilan = ilanSnapshot.getValue(Ilan::class.java)
-                        if (ilan != null) {
-                            tumIlanlar.add(ilan)
-                            Log.d(TAG, "İlan eklendi: ${ilan.baslik} - ${ilan.fiyat}")
-                        } else {
-                            Log.e(TAG, "İlan null geldi!")
-                        }
-                    }
-
-                    Log.d(TAG, "Toplam ilan sayısı: ${tumIlanlar.size}")
-
-                    ilanListesi.clear()
-                    ilanListesi.addAll(tumIlanlar)
-                    adapter.notifyDataSetChanged()
-
-                    progressBar.visibility = View.GONE
-
-                    if (ilanListesi.isEmpty()) {
-                        emptyText.visibility = View.VISIBLE
-                        Log.d(TAG, "İlan listesi boş")
-                    } else {
-                        emptyText.visibility = View.GONE
-                        Log.d(TAG, "İlan listesi dolu, ilk ilan: ${ilanListesi[0].baslik}")
-                    }
+                tumIlanlar.clear()
+                for (ilanSnapshot in snapshot.children) {
+                    val ilan = ilanSnapshot.getValue(Ilan::class.java)
+                    ilan?.let { tumIlanlar.add(it) }
                 }
+                filtrele()
+                progressBar.visibility = View.GONE
+            }
 
-                override fun onCancelled(error: DatabaseError) {
-                    progressBar.visibility = View.GONE
-                    Log.e(TAG, "Database error: ${error.message}")
-                    Toast.makeText(requireContext(), "İlanlar yüklenemedi: ${error.message}", Toast.LENGTH_SHORT).show()
-                }
-            })
+            override fun onCancelled(error: DatabaseError) {
+                if (!isAdded) return
+                progressBar.visibility = View.GONE
+                Log.e(TAG, "Hata: ${error.message}")
+            }
+        })
     }
 
     private fun filtrele() {
         val aramaMetni = searchEditText.text.toString().trim().lowercase()
         val secilenKategori = kategoriler[kategoriSpinner.selectedItemPosition]
-        val minFiyat = fiyatMinEditText.text.toString().trim().toDoubleOrNull() ?: 0.0
-        val maxFiyat = fiyatMaxEditText.text.toString().trim().toDoubleOrNull() ?: Double.MAX_VALUE
-        val siralama = siralamaSpinner.selectedItemPosition
+        val minFiyat = fiyatMinEditText.text.toString().toDoubleOrNull() ?: 0.0
+        val maxFiyat = fiyatMaxEditText.text.toString().toDoubleOrNull() ?: Double.MAX_VALUE
+        val siralamaModu = siralamaSpinner.selectedItemPosition
 
         val filtrelenmis = tumIlanlar.filter { ilan ->
-            val kategoriUygun = if (secilenKategori == "Tümü") true else ilan.kategori == secilenKategori
-            val fiyatUygun = ilan.fiyat >= minFiyat && ilan.fiyat <= maxFiyat
+            val kategoriUygun = (secilenKategori == "Tümü" || ilan.kategori == secilenKategori)
+            val fiyatUygun = (ilan.fiyat in minFiyat..maxFiyat)
             val aramaUygun = aramaMetni.isEmpty() ||
                     ilan.baslik.lowercase().contains(aramaMetni) ||
                     ilan.aciklama.lowercase().contains(aramaMetni)
@@ -166,19 +145,14 @@ class IlanlarFragment : Fragment() {
             kategoriUygun && fiyatUygun && aramaUygun
         }.toMutableList()
 
-        when (siralama) {
+        when (siralamaModu) {
             0 -> filtrelenmis.sortByDescending { it.ilanTarihi }
             1 -> filtrelenmis.sortBy { it.fiyat }
             2 -> filtrelenmis.sortByDescending { it.fiyat }
         }
 
-        ilanListesi.clear()
-        ilanListesi.addAll(filtrelenmis)
-        adapter.notifyDataSetChanged()
-
-        emptyText.visibility = if (ilanListesi.isEmpty()) View.VISIBLE else View.GONE
-
-        Log.d(TAG, "Filtrelenmiş ilan sayısı: ${ilanListesi.size}")
+        adapter.submitList(filtrelenmis)
+        emptyText.visibility = if (filtrelenmis.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun temizle() {
@@ -188,5 +162,12 @@ class IlanlarFragment : Fragment() {
         fiyatMaxEditText.text.clear()
         siralamaSpinner.setSelection(0)
         filtrele()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        // Dinleyiciyi kaldırarak bellek sızıntısını önle
+        dbListener?.let { dbQuery?.removeEventListener(it) }
+        _binding = null
     }
 }

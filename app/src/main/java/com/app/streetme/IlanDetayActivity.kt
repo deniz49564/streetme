@@ -1,6 +1,6 @@
 package com.streetme.app
 
-import android.content.Intent  // BU İMPORT ÖNEMLİ!
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -9,7 +9,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.fragment.app.FragmentActivity  // BU İMPORT ÖNEMLİ!
+import androidx.fragment.app.FragmentActivity
 import com.bumptech.glide.Glide
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
@@ -38,7 +38,7 @@ class IlanDetayActivity : AppCompatActivity() {
         fun start(activity: FragmentActivity, ilan: Ilan) {
             val intent = Intent(activity, IlanDetayActivity::class.java)
             intent.putExtra("ilan_id", ilan.id)
-            activity.startActivity(intent)  // ARTIK ÇALIŞIR
+            activity.startActivity(intent)
         }
     }
 
@@ -50,7 +50,7 @@ class IlanDetayActivity : AppCompatActivity() {
 
         ilanId = intent.getStringExtra("ilan_id") ?: ""
         if (ilanId.isEmpty()) {
-            Toast.makeText(this, "İlan bulunamadı", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Geçersiz ilan", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -72,38 +72,45 @@ class IlanDetayActivity : AppCompatActivity() {
         geriButton.setOnClickListener { finish() }
         mesajButton.setOnClickListener { mesajGonder() }
         silButton.setOnClickListener { ilanSil() }
+
+        // İlk başta butonları gizle, veri gelince duruma göre göster
+        silButton.visibility = View.GONE
+        mesajButton.visibility = View.GONE
     }
 
     private fun loadIlan() {
         val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
 
         Firebase.database.reference.child("ilans").child(ilanId)
-            .addListenerForSingleValueEvent(object : ValueEventListener {
+            .addValueEventListener(object : ValueEventListener { // Dinamik olması için addValueEventListener daha iyi
                 override fun onDataChange(snapshot: DataSnapshot) {
-                    if (snapshot.exists()) {
-                        ilan = snapshot.getValue(Ilan::class.java)
-                        ilan?.let {
-                            updateUI(it)
-
-                            isIlanSahibi = currentUserId == it.userId
-
-                            if (isIlanSahibi) {
-                                silButton.visibility = View.VISIBLE
-                                mesajButton.visibility = View.GONE
-                            } else {
-                                silButton.visibility = View.GONE
-                                mesajButton.visibility = View.VISIBLE
-                            }
+                    if (!snapshot.exists()) {
+                        // İlan başkası tarafından silindiyse ekrandan at
+                        if (!isFinishing) {
+                            Toast.makeText(this@IlanDetayActivity, "İlan artık mevcut değil", Toast.LENGTH_SHORT).show()
+                            finish()
                         }
-                    } else {
-                        Toast.makeText(this@IlanDetayActivity, "İlan bulunamadı", Toast.LENGTH_SHORT).show()
-                        finish()
+                        return
+                    }
+
+                    ilan = snapshot.getValue(Ilan::class.java)
+                    ilan?.let {
+                        updateUI(it)
+
+                        isIlanSahibi = (currentUserId != null && currentUserId == it.userId)
+
+                        if (isIlanSahibi) {
+                            silButton.visibility = View.VISIBLE
+                            mesajButton.visibility = View.GONE
+                        } else {
+                            silButton.visibility = View.GONE
+                            mesajButton.visibility = View.VISIBLE
+                        }
                     }
                 }
 
                 override fun onCancelled(error: DatabaseError) {
-                    Toast.makeText(this@IlanDetayActivity, "İlan yüklenemedi: ${error.message}", Toast.LENGTH_SHORT).show()
-                    finish()
+                    Toast.makeText(this@IlanDetayActivity, "Hata: ${error.message}", Toast.LENGTH_SHORT).show()
                 }
             })
     }
@@ -114,79 +121,55 @@ class IlanDetayActivity : AppCompatActivity() {
         fiyatText.text = ilan.getFiyatText()
         kategoriText.text = ilan.kategori
 
-        if (ilan.resimUrl.isNotEmpty()) {
-            Glide.with(this).load(ilan.resimUrl).into(ilanImage)
-        }
+        Glide.with(this)
+            .load(ilan.resimUrl)
+            .placeholder(R.drawable.ic_ilan_default)
+            .error(R.drawable.ic_ilan_default)
+            .into(ilanImage)
 
-        Firebase.database.reference.child("users").child(ilan.userId)
-            .addListenerForSingleValueEvent(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val user = snapshot.getValue(StreetMeUser::class.java)
-                    satanKisiText.text = user?.getDisplayName() ?: "Kullanıcı"
-                }
-
-                override fun onCancelled(error: DatabaseError) {
-                    satanKisiText.text = "Kullanıcı"
-                }
-            })
+        // Satan kişinin adını alırken 'get()' kullanarak tek seferlik çekim yapıyoruz
+        Firebase.database.reference.child("users").child(ilan.userId).get()
+            .addOnSuccessListener { snapshot ->
+                val user = snapshot.getValue(StreetMeUser::class.java)
+                satanKisiText.text = "Satıcı: ${user?.adSoyad ?: "Kullanıcı"}"
+            }
     }
 
     private fun mesajGonder() {
-        val currentIlan = ilan
-        if (currentIlan == null) {
-            Toast.makeText(this, "İlan yüklenemedi", Toast.LENGTH_SHORT).show()
+        val targetIlan = ilan ?: return
+        val myId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+        if (myId == targetIlan.userId) {
+            Toast.makeText(this, "Bu senin kendi ilanın!", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
-        if (currentUserId == null) {
-            Toast.makeText(this, "Lütfen giriş yapın", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (currentUserId == currentIlan.userId) {
-            Toast.makeText(this, "Kendi ilanına mesaj gönderemezsin", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        Firebase.database.reference.child("users").child(currentIlan.userId)
-            .addListenerForSingleValueEvent(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val user = snapshot.getValue(StreetMeUser::class.java)
-                    if (user != null) {
-                        val intent = Intent(this@IlanDetayActivity, ChatActivity::class.java)
-                        intent.putExtra("user_id", user.id)
-                        intent.putExtra("user_name", user.getDisplayName())
-                        intent.putExtra("user_avatar", user.profilFotoUrl)
-                        startActivity(intent)
-                    } else {
-                        Toast.makeText(this@IlanDetayActivity, "Kullanıcı bulunamadı", Toast.LENGTH_SHORT).show()
-                    }
+        // ChatActivity'ye giderken gereken tüm bilgileri kullanıcı tablosundan doğrula
+        Firebase.database.reference.child("users").child(targetIlan.userId).get()
+            .addOnSuccessListener { snapshot ->
+                val user = snapshot.getValue(StreetMeUser::class.java)
+                if (user != null) {
+                    val intent = Intent(this, ChatActivity::class.java)
+                    intent.putExtra("user_id", targetIlan.userId)
+                    intent.putExtra("user_name", user.adSoyad ?: "Kullanıcı")
+                    startActivity(intent)
                 }
-
-                override fun onCancelled(error: DatabaseError) {
-                    Toast.makeText(this@IlanDetayActivity, "Kullanıcı bilgileri alınamadı", Toast.LENGTH_SHORT).show()
-                }
-            })
+            }
     }
 
     private fun ilanSil() {
-        val currentIlan = ilan ?: return
-
         AlertDialog.Builder(this)
-            .setTitle("İlanı Sil")
-            .setMessage("Bu ilanı silmek istediğinize emin misiniz?")
+            .setTitle("İlanı Kaldır")
+            .setMessage("Bu ilanı kalıcı olarak silmek istediğinize emin misiniz?")
             .setPositiveButton("Evet") { _, _ ->
-                Firebase.database.reference.child("ilans").child(currentIlan.id).removeValue()
+                // Veritabanından sil
+                Firebase.database.reference.child("ilans").child(ilanId).removeValue()
                     .addOnSuccessListener {
-                        Toast.makeText(this, "İlan silindi", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "İlan başarıyla kaldırıldı", Toast.LENGTH_SHORT).show()
                         finish()
                     }
-                    .addOnFailureListener { e ->
-                        Toast.makeText(this, "Silme hatası: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
             }
-            .setNegativeButton("Hayır", null)
+            .setNegativeButton("Vazgeç", null)
             .show()
     }
 }

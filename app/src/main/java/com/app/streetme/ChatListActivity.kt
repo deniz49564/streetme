@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -24,6 +25,9 @@ class ChatListActivity : AppCompatActivity() {
 
     private val chatList = arrayListOf<ChatPreview>()
     private lateinit var adapter: ChatListAdapter
+
+    private var chatListener: ValueEventListener? = null
+    private var chatQuery: Query? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,11 +48,10 @@ class ChatListActivity : AppCompatActivity() {
 
         recyclerView.layoutManager = LinearLayoutManager(this)
         adapter = ChatListAdapter(chatList) { chat ->
-            // Sohbete tıklandığında
             val intent = Intent(this, ChatActivity::class.java)
-            intent.putExtra("chat_id", chat.id)
-            intent.putExtra("other_user_id", chat.otherUserId)
-            intent.putExtra("other_user_name", chat.otherUserName)
+            // ChatActivity'deki karşılık gelen anahtarları (key) kullandık
+            intent.putExtra("user_id", chat.otherUserId)
+            intent.putExtra("user_name", chat.otherUserName)
             startActivity(intent)
         }
         recyclerView.adapter = adapter
@@ -57,45 +60,69 @@ class ChatListActivity : AppCompatActivity() {
     private fun loadChats() {
         val currentUserId = auth.currentUser?.uid ?: return
 
-        database.child("chats").orderByChild("lastMessageTime")
-            .addValueEventListener(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
+        // Zaman damgasına göre sıralı sorgu
+        chatQuery = database.child("chats").orderByChild("lastMessageTime")
+
+        chatListener = chatQuery?.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val tempMap = mutableMapOf<String, ChatPreview>()
+                val totalChats = snapshot.childrenCount
+                var processedChats = 0
+
+                if (totalChats == 0L) {
                     chatList.clear()
-                    for (chatSnapshot in snapshot.children) {
-                        val chatId = chatSnapshot.key ?: continue
-                        val lastMessage = chatSnapshot.child("lastMessage").getValue(String::class.java) ?: ""
-                        val lastMessageTime = chatSnapshot.child("lastMessageTime").getValue(Long::class.java) ?: 0
-                        val lastMessageSender = chatSnapshot.child("lastMessageSender").getValue(String::class.java) ?: ""
-
-                        // Diğer kullanıcı ID'sini bul
-                        val otherUserId = chatId.replace(currentUserId, "").replace("_", "")
-                        if (otherUserId.isEmpty()) continue
-
-                        // Diğer kullanıcı bilgilerini al
-                        database.child("users").child(otherUserId).get()
-                            .addOnSuccessListener { userSnapshot ->
-                                val user = userSnapshot.getValue(StreetMeUser::class.java)
-                                val otherUserName = user?.adSoyad ?: "Kullanıcı"
-
-                                val isRead = lastMessageSender == currentUserId
-
-                                chatList.add(
-                                    ChatPreview(
-                                        id = chatId,
-                                        otherUserId = otherUserId,
-                                        otherUserName = otherUserName,
-                                        lastMessage = lastMessage,
-                                        lastMessageTime = lastMessageTime,
-                                        unreadCount = if (!isRead) 1 else 0
-                                    )
-                                )
-                                adapter.notifyDataSetChanged()
-                            }
-                    }
+                    adapter.notifyDataSetChanged()
+                    return
                 }
 
-                override fun onCancelled(error: DatabaseError) {}
-            })
+                for (chatSnapshot in snapshot.children) {
+                    val chatId = chatSnapshot.key ?: continue
+                    val lastMessage = chatSnapshot.child("lastMessage").getValue(String::class.java) ?: ""
+                    val lastMessageTime = chatSnapshot.child("lastMessageTime").getValue(Long::class.java) ?: 0
+                    val lastMessageSender = chatSnapshot.child("lastMessageSender").getValue(String::class.java) ?: ""
+
+                    val otherUserId = chatId.replace(currentUserId, "").replace("_", "")
+
+                    database.child("users").child(otherUserId).get().addOnSuccessListener { userSnapshot ->
+                        val otherUserName = userSnapshot.child("adSoyad").getValue(String::class.java) ?: "Kullanıcı"
+                        val isRead = lastMessageSender == currentUserId
+
+                        val preview = ChatPreview(
+                            id = chatId,
+                            otherUserId = otherUserId,
+                            otherUserName = otherUserName,
+                            lastMessage = lastMessage,
+                            lastMessageTime = lastMessageTime,
+                            unreadCount = if (!isRead) 1 else 0 // Basit bir bayrak, geliştirilebilir
+                        )
+
+                        tempMap[chatId] = preview
+                        processedChats++
+
+                        // Tüm kullanıcı bilgileri tamamlandığında listeyi güncelle ve sırala
+                        if (processedChats.toLong() == totalChats) {
+                            updateUI(tempMap)
+                        }
+                    }
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(this@ChatListActivity, "Hata: ${error.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    private fun updateUI(tempMap: Map<String, ChatPreview>) {
+        chatList.clear()
+        // Mesajları yeniden zamana göre (büyükten küçüğe) sıralıyoruz
+        chatList.addAll(tempMap.values.sortedByDescending { it.lastMessageTime })
+        adapter.notifyDataSetChanged()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        chatListener?.let { chatQuery?.removeEventListener(it) }
     }
 
     data class ChatPreview(
@@ -134,6 +161,7 @@ class ChatListActivity : AppCompatActivity() {
             }
 
             private fun formatTime(timestamp: Long): String {
+                if (timestamp == 0L) return ""
                 val date = java.util.Date(timestamp)
                 val format = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                 return format.format(date)

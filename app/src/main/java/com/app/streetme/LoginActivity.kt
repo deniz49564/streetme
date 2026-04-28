@@ -2,14 +2,15 @@ package com.streetme.app
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Patterns
+import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.ktx.database
-import com.google.firebase.ktx.Firebase
 
 class LoginActivity : AppCompatActivity() {
 
@@ -21,22 +22,20 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var telefonGirisText: TextView
     private lateinit var progressBar: android.widget.ProgressBar
 
-    companion object {
-        private const val DATABASE_URL = "https://streetme-b19f5-default-rtdb.europe-west1.firebasedatabase.app"
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
         auth = FirebaseAuth.getInstance()
 
-        initViews()
-        setupClickListeners()
-
+        // Oturum zaten açıksa direkt yönlendir
         if (auth.currentUser != null) {
             goToHomeActivity()
+            return
         }
+
+        initViews()
+        setupClickListeners()
     }
 
     private fun initViews() {
@@ -49,12 +48,18 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
-        girisButton.setOnClickListener { login() }
+        girisButton.setOnClickListener {
+            closeKeyboard()
+            login()
+        }
+
         kayitOlText.setOnClickListener {
             startActivity(Intent(this, RegisterActivity::class.java))
         }
+
         telefonGirisText.setOnClickListener {
-            startActivity(Intent(this, TelefonLoginActivity::class.java))
+            // Telefonla giriş modülün hazırsa buraya gider
+            // startActivity(Intent(this, TelefonLoginActivity::class.java))
         }
     }
 
@@ -62,29 +67,50 @@ class LoginActivity : AppCompatActivity() {
         val email = emailEditText.text.toString().trim()
         val sifre = sifreEditText.text.toString().trim()
 
+        // Gelişmiş Doğrulama
         if (email.isEmpty()) {
-            emailEditText.error = "E-posta giriniz"
+            emailEditText.error = "E-posta boş olamaz"
             return
         }
-        if (sifre.isEmpty()) {
-            sifreEditText.error = "Şifre giriniz"
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            emailEditText.error = "Geçerli bir e-posta adresi girin"
+            return
+        }
+        if (sifre.length < 6) {
+            sifreEditText.error = "Şifre en az 6 karakter olmalıdır"
             return
         }
 
-        progressBar.visibility = android.view.View.VISIBLE
-        girisButton.isEnabled = false
+        setLoading(true)
 
         auth.signInWithEmailAndPassword(email, sifre)
             .addOnCompleteListener { task ->
-                progressBar.visibility = android.view.View.GONE
-                girisButton.isEnabled = true
-
                 if (task.isSuccessful) {
                     goToHomeActivity()
                 } else {
-                    Toast.makeText(this, "Giriş başarısız: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                    setLoading(false)
+                    val errorMsg = when(task.exception?.message) {
+                        null -> "Bilinmeyen bir hata oluştu"
+                        else -> "Giriş yapılamadı. Bilgilerinizi kontrol edin."
+                    }
+                    Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
                 }
             }
+    }
+
+    private fun setLoading(isLoading: Boolean) {
+        progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+        girisButton.isEnabled = !isLoading
+        emailEditText.isEnabled = !isLoading
+        sifreEditText.isEnabled = !isLoading
+    }
+
+    private fun closeKeyboard() {
+        val view = this.currentFocus
+        if (view != null) {
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(view.windowToken, 0)
+        }
     }
 
     private fun goToHomeActivity() {

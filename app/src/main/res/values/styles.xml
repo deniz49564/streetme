@@ -17,7 +17,10 @@
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:windowBackground">@color/background</item>
     </style>
-
+    <style name="RoundedAppearance" parent="">
+        <item name="cornerSize">16dp</item>
+        <item name="cornerFamily">rounded</item>
+    </style>
     <!-- EKLENEN STYLE -->
     <style name="ShapeAppearanceOverlay.App.CornerSize50Percent" parent="">
         <item name="cornerSize">50%</item>

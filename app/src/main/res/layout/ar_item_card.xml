@@ -1,0 +1,30 @@
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="150dp"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="12dp"
+    app:cardBackgroundColor="@color/primary">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/ar_ilan_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="İlan Başlığı"
+            android:textColor="@color/white"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/ar_ilan_price"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="₺500"
+            android:textColor="#FFEB3B" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

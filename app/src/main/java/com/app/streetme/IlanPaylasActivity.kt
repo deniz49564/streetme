@@ -1,156 +1,146 @@
 package com.streetme.app
 
+import android.Manifest
+import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.ktx.database
-import com.google.firebase.ktx.Firebase
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.storage.FirebaseStorage
-import com.google.firebase.storage.ktx.storage
+import java.util.*
 
 class IlanPaylasActivity : AppCompatActivity() {
 
-    private lateinit var baslikEditText: EditText
-    private lateinit var aciklamaEditText: EditText
-    private lateinit var fiyatEditText: EditText
-    private lateinit var kategoriSpinner: Spinner
     private lateinit var resimImageView: ImageView
+    private lateinit var baslikEdit: EditText
+    private lateinit var fiyatEdit: EditText
+    private lateinit var aciklamaEdit: EditText
+    private lateinit var kategoriSpinner: Spinner
     private lateinit var paylasButton: Button
     private lateinit var progressBar: ProgressBar
-    private lateinit var geriButton: ImageView
 
-    private var secilenResimUri: Uri? = null
-
-    private val kategoriler = arrayOf("Elektronik", "Ev Eşyası", "Giyim", "Kitap", "Diğer")
-
-    companion object {
-        private const val DATABASE_URL = "https://streetme-b19f5-default-rtdb.europe-west1.firebasedatabase.app"
-    }
+    private var secilenGorsel: Uri? = null
+    private val auth = FirebaseAuth.getInstance()
+    private val database = FirebaseDatabase.getInstance().reference
+    private val storage = FirebaseStorage.getInstance().reference
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_ilan_paylas)
 
-        initViews()
+        setupViews()
         setupSpinner()
-        setupImagePicker()
 
-        paylasButton.setOnClickListener { paylasIlan() }
-        geriButton.setOnClickListener { finish() }
-    }
+        // Görsel seçme işlemi
+        val resimSecici = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                secilenGorsel = result.data?.data
+                resimImageView.setImageURI(secilenGorsel)
+            }
+        }
 
-    private fun initViews() {
-        baslikEditText = findViewById(R.id.baslik_edit_text)
-        aciklamaEditText = findViewById(R.id.aciklama_edit_text)
-        fiyatEditText = findViewById(R.id.fiyat_edit_text)
-        kategoriSpinner = findViewById(R.id.kategori_spinner)
-        resimImageView = findViewById(R.id.resim_image_view)
-        paylasButton = findViewById(R.id.paylas_button)
-        progressBar = findViewById(R.id.progress_bar)
-        geriButton = findViewById(R.id.geri_button)
-    }
-
-    private fun setupSpinner() {
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, kategoriler)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        kategoriSpinner.adapter = adapter
-    }
-
-    private fun setupImagePicker() {
         resimImageView.setOnClickListener {
             val intent = Intent(Intent.ACTION_PICK)
             intent.type = "image/*"
-            startActivityForResult(intent, 1001)
+            resimSecici.launch(intent)
         }
+
+        paylasButton.setOnClickListener { ilaniHazirla() }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 1001 && resultCode == RESULT_OK) {
-            secilenResimUri = data?.data
-            resimImageView.setImageURI(secilenResimUri)
-        }
+    private fun setupViews() {
+        resimImageView = findViewById(R.id.resim_image_view)
+        baslikEdit = findViewById(R.id.baslik_edit_text)
+        fiyatEdit = findViewById(R.id.fiyat_edit_text)
+        aciklamaEdit = findViewById(R.id.aciklama_edit_text)
+        kategoriSpinner = findViewById(R.id.kategori_spinner)
+        paylasButton = findViewById(R.id.paylas_button)
+        progressBar = findViewById(R.id.progress_bar)
+        findViewById<ImageView>(R.id.geri_button).setOnClickListener { finish() }
     }
 
-    private fun paylasIlan() {
-        val baslik = baslikEditText.text.toString().trim()
-        val aciklama = aciklamaEditText.text.toString().trim()
-        val fiyat = fiyatEditText.text.toString().trim().toDoubleOrNull() ?: 0.0
-        val kategori = kategoriler[kategoriSpinner.selectedItemPosition]
+    private fun setupSpinner() {
+        val kategoriler = arrayOf("Elektronik", "Moda", "Ev Eşyası", "Hizmet", "Diğer")
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, kategoriler)
+        kategoriSpinner.adapter = adapter
+    }
 
-        if (baslik.isEmpty()) {
-            baslikEditText.error = "Başlık giriniz"
+    private fun ilaniHazirla() {
+        val baslik = baslikEdit.text.toString()
+        val fiyat = fiyatEdit.text.toString()
+
+        if (baslik.isEmpty() || fiyat.isEmpty() || secilenGorsel == null) {
+            Toast.makeText(this, "Lütfen tüm alanları doldurun ve resim seçin!", Toast.LENGTH_SHORT).show()
             return
         }
 
         progressBar.visibility = View.VISIBLE
         paylasButton.isEnabled = false
 
-        val ilanId = Firebase.database(DATABASE_URL).reference.child("ilans").push().key ?: return
-        val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        // Mevcut konumu al ve yükle
+        getLocationAndUpload(baslik, fiyat.toDouble())
+    }
 
-        if (secilenResimUri != null) {
-            // Storage'ı doğru şekilde başlat
-            val storageRef = FirebaseStorage.getInstance().reference
-            val imageRef = storageRef.child("ilan_resimleri/$ilanId.jpg")
+    private fun getLocationAndUpload(baslik: String, fiyat: Double) {
+        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-            imageRef.putFile(secilenResimUri!!)
-                .addOnSuccessListener { taskSnapshot ->
-                    imageRef.downloadUrl.addOnSuccessListener { uri ->
-                        kaydetIlan(ilanId, userId, baslik, aciklama, fiyat, kategori, uri.toString())
-                    }.addOnFailureListener { e ->
-                        progressBar.visibility = View.GONE
-                        paylasButton.isEnabled = true
-                        Toast.makeText(this, "Resim URL alınamadı: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                .addOnFailureListener { e ->
-                    progressBar.visibility = View.GONE
-                    paylasButton.isEnabled = true
-                    Toast.makeText(this, "Resim yüklenemedi: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                val lat = location?.latitude ?: 0.0
+                val lng = location?.longitude ?: 0.0
+                uploadImage(baslik, fiyat, lat, lng)
+            }
         } else {
-            kaydetIlan(ilanId, userId, baslik, aciklama, fiyat, kategori, "")
+            // İzin yoksa varsayılan veya hata
+            uploadImage(baslik, fiyat, 0.0, 0.0)
         }
     }
 
-    private fun kaydetIlan(ilanId: String, userId: String, baslik: String, aciklama: String, fiyat: Double, kategori: String, resimUrl: String) {
-        val konumRef = Firebase.database(DATABASE_URL).reference.child("locations").child(userId)
-        konumRef.get().addOnSuccessListener { snapshot ->
-            val latitude = snapshot.child("latitude").getValue(Double::class.java) ?: 0.0
-            val longitude = snapshot.child("longitude").getValue(Double::class.java) ?: 0.0
+    private fun uploadImage(baslik: String, fiyat: Double, lat: Double, lng: Double) {
+        val uuid = UUID.randomUUID().toString()
+        val gorselYolu = storage.child("ilanlar/$uuid.jpg")
 
-            val ilan = Ilan(
-                id = ilanId,
-                userId = userId,
-                baslik = baslik,
-                aciklama = aciklama,
-                fiyat = fiyat,
-                kategori = kategori,
-                resimUrl = resimUrl,
-                latitude = latitude,
-                longitude = longitude
-            )
-
-            Firebase.database(DATABASE_URL).reference.child("ilans").child(ilanId).setValue(ilan)
-                .addOnSuccessListener {
-                    progressBar.visibility = View.GONE
-                    Toast.makeText(this, "İlan paylaşıldı!", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
-                .addOnFailureListener { e ->
-                    progressBar.visibility = View.GONE
-                    paylasButton.isEnabled = true
-                    Toast.makeText(this, "Hata: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-        }.addOnFailureListener { e ->
+        gorselYolu.putFile(secilenGorsel!!).addOnSuccessListener {
+            gorselYolu.downloadUrl.addOnSuccessListener { uri ->
+                saveToDatabase(baslik, fiyat, lat, lng, uri.toString())
+            }
+        }.addOnFailureListener {
             progressBar.visibility = View.GONE
             paylasButton.isEnabled = true
-            Toast.makeText(this, "Konum alınamadı: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Resim yüklenemedi: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun saveToDatabase(baslik: String, fiyat: Double, lat: Double, lng: Double, url: String) {
+        val ilanId = database.child("ilans").push().key ?: return
+        val aciklama = aciklamaEdit.text.toString()
+        val kategori = kategoriSpinner.selectedItem.toString()
+
+        val ilanData = mapOf(
+            "id" to ilanId,
+            "saticiId" to auth.currentUser?.uid,
+            "baslik" to baslik,
+            "fiyat" to fiyat,
+            "aciklama" to aciklama,
+            "kategori" to kategori,
+            "imageUrl" to url,
+            "latitude" to lat,
+            "longitude" to lng,
+            "durum" to "aktif",
+            "timestamp" to System.currentTimeMillis()
+        )
+
+        database.child("ilans").child(ilanId).setValue(ilanData).addOnSuccessListener {
+            Toast.makeText(this, "İlan başarıyla sokağa bırakıldı!", Toast.LENGTH_SHORT).show()
+            finish()
         }
     }
 }

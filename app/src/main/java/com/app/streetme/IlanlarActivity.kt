@@ -10,8 +10,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.firebase.database.*
-import com.google.firebase.database.ktx.database
-import com.google.firebase.ktx.Firebase
 
 class IlanlarActivity : AppCompatActivity() {
 
@@ -26,11 +24,9 @@ class IlanlarActivity : AppCompatActivity() {
     private lateinit var emptyText: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var backButton: ImageView
-    private lateinit var haritaButton: ImageView
 
-    private val ilanListesi = arrayListOf<Ilan>()
     private val tumIlanlar = arrayListOf<Ilan>()
-    private lateinit var adapter: IlanAdapter
+    private lateinit var adapter: IlanAdapter // Daha önce güncellediğimiz ListAdapter olan versiyon
 
     private val kategoriler = listOf("Tümü", "Elektronik", "Ev Eşyası", "Giyim", "Kitap", "Diğer")
     private val siralamaSecenekleri = listOf("En Yeni", "En Ucuz", "En Pahalı")
@@ -46,7 +42,6 @@ class IlanlarActivity : AppCompatActivity() {
         initViews()
         setupSpinners()
         setupSearch()
-        setupClickListeners()
         loadIlans()
     }
 
@@ -62,49 +57,44 @@ class IlanlarActivity : AppCompatActivity() {
         emptyText = findViewById(R.id.empty_text)
         progressBar = findViewById(R.id.progress_bar)
         backButton = findViewById(R.id.back_button)
-        haritaButton = findViewById(R.id.harita_button)
 
         backButton.setOnClickListener { finish() }
-        haritaButton.setOnClickListener {
-            startActivity(Intent(this, MainActivity::class.java))
-        }
+        filtreleButton.setOnClickListener { filtrele() }
+        temizleButton.setOnClickListener { temizle() }
 
         recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = IlanAdapter(ilanListesi) { ilan ->
+
+        // Önceki adımda yazdığımız optimize edilmiş adapter'ı kullanıyoruz
+        adapter = IlanAdapter { ilan ->
             IlanDetayActivity.start(this, ilan)
         }
         recyclerView.adapter = adapter
     }
 
     private fun setupSpinners() {
-        val kategoriAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, kategoriler)
-        kategoriAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        kategoriSpinner.adapter = kategoriAdapter
+        val katAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, kategoriler)
+        katAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        kategoriSpinner.adapter = katAdapter
 
-        val siralamaAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, siralamaSecenekleri)
-        siralamaAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        siralamaSpinner.adapter = siralamaAdapter
+        val sirAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, siralamaSecenekleri)
+        sirAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        siralamaSpinner.adapter = sirAdapter
     }
 
     private fun setupSearch() {
         searchEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                // Her harf değişiminde listeyi süzüyoruz
                 filtrele()
             }
             override fun afterTextChanged(s: Editable?) {}
         })
     }
 
-    private fun setupClickListeners() {
-        filtreleButton.setOnClickListener { filtrele() }
-        temizleButton.setOnClickListener { temizle() }
-    }
-
     private fun loadIlans() {
         progressBar.visibility = View.VISIBLE
 
-        // DÜZELTİLDİ: FirebaseDatabase.getInstance() kullan
         FirebaseDatabase.getInstance(DATABASE_URL).reference.child("ilans")
             .orderByChild("durum").equalTo("aktif")
             .addValueEventListener(object : ValueEventListener {
@@ -112,9 +102,7 @@ class IlanlarActivity : AppCompatActivity() {
                     tumIlanlar.clear()
                     for (ilanSnapshot in snapshot.children) {
                         val ilan = ilanSnapshot.getValue(Ilan::class.java)
-                        ilan?.let {
-                            tumIlanlar.add(it)
-                        }
+                        ilan?.let { tumIlanlar.add(it) }
                     }
                     filtrele()
                     progressBar.visibility = View.GONE
@@ -122,7 +110,7 @@ class IlanlarActivity : AppCompatActivity() {
 
                 override fun onCancelled(error: DatabaseError) {
                     progressBar.visibility = View.GONE
-                    Toast.makeText(this@IlanlarActivity, "İlanlar yüklenemedi", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@IlanlarActivity, "Bağlantı hatası", Toast.LENGTH_SHORT).show()
                 }
             })
     }
@@ -130,13 +118,13 @@ class IlanlarActivity : AppCompatActivity() {
     private fun filtrele() {
         val aramaMetni = searchEditText.text.toString().trim().lowercase()
         val secilenKategori = kategoriler[kategoriSpinner.selectedItemPosition]
-        val minFiyat = fiyatMinEditText.text.toString().trim().toDoubleOrNull() ?: 0.0
-        val maxFiyat = fiyatMaxEditText.text.toString().trim().toDoubleOrNull() ?: Double.MAX_VALUE
-        val siralama = siralamaSpinner.selectedItemPosition
+        val minFiyat = fiyatMinEditText.text.toString().toDoubleOrNull() ?: 0.0
+        val maxFiyat = fiyatMaxEditText.text.toString().toDoubleOrNull() ?: Double.MAX_VALUE
+        val siralamaModu = siralamaSpinner.selectedItemPosition
 
         val filtrelenmis = tumIlanlar.filter { ilan ->
-            val kategoriUygun = if (secilenKategori == "Tümü") true else ilan.kategori == secilenKategori
-            val fiyatUygun = ilan.fiyat >= minFiyat && ilan.fiyat <= maxFiyat
+            val kategoriUygun = (secilenKategori == "Tümü" || ilan.kategori == secilenKategori)
+            val fiyatUygun = (ilan.fiyat in minFiyat..maxFiyat)
             val aramaUygun = aramaMetni.isEmpty() ||
                     ilan.baslik.lowercase().contains(aramaMetni) ||
                     ilan.aciklama.lowercase().contains(aramaMetni)
@@ -144,17 +132,17 @@ class IlanlarActivity : AppCompatActivity() {
             kategoriUygun && fiyatUygun && aramaUygun
         }.toMutableList()
 
-        when (siralama) {
-            0 -> filtrelenmis.sortByDescending { it.ilanTarihi }
-            1 -> filtrelenmis.sortBy { it.fiyat }
-            2 -> filtrelenmis.sortByDescending { it.fiyat }
+        // Sıralama Mantığı
+        when (siralamaModu) {
+            0 -> filtrelenmis.sortByDescending { it.ilanTarihi } // En Yeni
+            1 -> filtrelenmis.sortBy { it.fiyat }               // En Ucuz
+            2 -> filtrelenmis.sortByDescending { it.fiyat }    // En Pahalı
         }
 
-        ilanListesi.clear()
-        ilanListesi.addAll(filtrelenmis)
-        adapter.notifyDataSetChanged()
+        // ListAdapter kullanıldığı için sadece submitList yapıyoruz
+        adapter.submitList(filtrelenmis)
 
-        emptyText.visibility = if (ilanListesi.isEmpty()) View.VISIBLE else View.GONE
+        emptyText.visibility = if (filtrelenmis.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun temizle() {
