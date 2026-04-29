@@ -1,93 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.streetme.app">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.ar" android:required="true" />
 
     <application
         android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.StreetMe"
+        android:theme="@style/Theme.AppCompat.Light.NoActionBar"
         tools:targetApi="31">
+        <activity
+            android:name=".ArIlanActivity"
+            android:exported="false" />
 
-        <!-- Google Maps API Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyA0TqYnEtp448NdTpO2BEI4j0AS5RiB2UE" />
+            android:value="SENIN_API_ANAHTARIN_BURAYA" />
 
-        <!-- HomeActivity - ANA SAYFA -->
-        <activity
-            android:name=".HomeActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
+        <meta-data
+            android:name="com.google.ar.core"
+            android:value="required" />
 
-        <!-- MainActivity - HARİTA (İlanlar) -->
         <activity
             android:name=".MainActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- LoginActivity - LAUNCHER (GİRİŞ EKRANI) -->
-        <activity
-            android:name=".LoginActivity"
-            android:exported="true"
-            android:screenOrientation="portrait">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- ChatActivity - SOHBET -->
-        <activity
-            android:name=".ChatActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- IlanPaylasActivity - İLAN PAYLAŞ -->
-        <activity
-            android:name=".IlanPaylasActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- IlanDetayActivity - İLAN DETAY -->
-        <activity
-            android:name=".IlanDetayActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-        <activity
-            android:name=".RegisterActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <activity
-            android:name=".TelefonLoginActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-        <activity
-            android:name=".IlanlarActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-        <!-- ProfileActivity - PROFİL (YENİ) -->
-        <activity
-            android:name=".ProfileActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- ChatListActivity - SOHBET LİSTESİ (YENİ) -->
-        <activity
-            android:name=".ChatListActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
     </application>
-
 </manifest>

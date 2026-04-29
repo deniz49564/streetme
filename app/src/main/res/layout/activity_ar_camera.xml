@@ -5,36 +5,28 @@
     android:layout_height="match_parent">
 
     <io.github.sceneview.ar.ArSceneView
-        android:id="@+id/arSceneView"
+        android:id="@+id/sceneView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:arSceneLifecycleOwner="true" />
+        android:layout_height="match_parent" />
 
-    <RelativeLayout
-        android:layout_width="match_parent"
+    <ImageButton
+        android:id="@+id/btn_back_to_map"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_margin="16dp"
+        android:background="@drawable/shape_round_button"
+        android:src="@android:drawable/ic_menu_revert"
+        app:tint="@color/black" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:padding="20dp">
-
-        <ImageView
-            android:id="@+id/btn_close_ar"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:src="@drawable/ic_back"
-            android:background="@drawable/circle_background"
-            android:padding="8dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerHorizontal="true"
-            android:text="Sokak Görünümü"
-            android:textColor="@color/white"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:shadowColor="@color/black"
-            android:shadowDx="2"
-            android:shadowDy="2"
-            android:shadowRadius="2"/>
-    </RelativeLayout>
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:background="#80000000"
+        android:padding="8dp"
+        android:text="Sokaklar taranıyor..."
+        android:textColor="@color/white" />
 
 </FrameLayout>

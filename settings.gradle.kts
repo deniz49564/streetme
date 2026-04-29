@@ -16,7 +16,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Alter Core reposu eklendi!
         maven {
             name = "Alter"
             url = uri("https://facemoji.jfrog.io/artifactory/default-maven-local/")

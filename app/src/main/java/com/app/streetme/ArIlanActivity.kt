@@ -1,76 +1,57 @@
 package com.streetme.app
 
 import android.os.Bundle
+import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.database.*
+import com.streetme.app.models.Product // Klasör adın models olduğu için bu şekilde
 import io.github.sceneview.ar.ArSceneView
-import io.github.sceneview.math.Position
-import io.github.sceneview.node.ViewNode
+import io.github.sceneview.ar.node.ArModelNode
+import io.github.sceneview.ar.node.PlacementMode
 
 class ArIlanActivity : AppCompatActivity() {
 
-    private lateinit var arSceneView: ArSceneView
-    private lateinit var database: DatabaseReference
+    private lateinit var sceneView: ArSceneView
+    private lateinit var txtIlanBaslik: TextView
+    private lateinit var txtIlanFiyat: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // XML'inizde ArSceneView ID'sinin arSceneView olduğundan emin olun
-        setContentView(R.layout.activity_ar_camera)
+        setContentView(R.layout.activity_ar_ilan)
 
-        arSceneView = findViewById<ArSceneView>(R.id.arSceneView).apply {
-            // Lifecycle otomatik bağlanır, ancak val hatası almamak için
-            // sadece nesneyi başlatıyoruz.
+        sceneView = findViewById(R.id.sceneViewIlan)
+        txtIlanBaslik = findViewById(R.id.txt_ar_ilan_baslik)
+        txtIlanFiyat = findViewById(R.id.txt_ar_ilan_fiyat)
+
+        // Geri dön butonu
+        findViewById<View>(R.id.btn_close_ar_ilan).setOnClickListener {
+            finish()
         }
 
-        database = FirebaseDatabase.getInstance().reference.child("ilans")
-        fetchIlansFromFirebase()
+        // 3D Modeli sahneye ekle (Test için bir model yüklüyoruz)
+        setupArModel()
     }
 
-    private fun fetchIlansFromFirebase() {
-        database.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                // Yeni veriler geldiğinde eski AR düğümlerini temizle
-                arSceneView.children.filterIsInstance<ViewNode>().forEach { it.parent = null }
-
-                for (postSnapshot in snapshot.children) {
-                    val ilan = postSnapshot.getValue(Ilan::class.java)
-                    ilan?.let {
-                        renderIlanInAR(it)
-                    }
-                }
-            }
-            override fun onCancelled(error: DatabaseError) {
-                Toast.makeText(this@ArIlanActivity, "Hata: ${error.message}", Toast.LENGTH_SHORT).show()
-            }
-        })
-    }
-
-    private fun renderIlanInAR(ilan: Ilan) {
-        // ViewNode oluştururken val hatası almamak için engine'i constructor'da geçiyoruz
-        val node = ViewNode(arSceneView.engine).apply {
-            // Rastgele bir konum (Kameranın 2-5 metre önü)
-            position = Position(
-                x = (Math.random().toFloat() * 4f) - 2f,
-                y = (Math.random().toFloat() * 1f),
-                z = -3f - (Math.random().toFloat() * 2f)
+    private fun setupArModel() {
+        val modelNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply {
+            loadModelGlbAsync(
+                glbFileLocation = "https://sceneview.github.io/assets/models/DamagedHelmet.glb",
+                autoAnimate = true,
+                scaleToUnits = 0.5f // İlan olduğu için biraz daha küçük (50cm)
             )
-
-            // Görünümü (XML) yükle
-            loadView(context = this@ArIlanActivity, layoutResId = R.layout.ar_item_card) { _, view ->
-                // Görünüm içindeki metinleri doldur
-                view.findViewById<TextView>(R.id.ar_ilan_title).text = ilan.baslik
-                view.findViewById<TextView>(R.id.ar_ilan_price).text = "${ilan.fiyat} TL"
-            }
-
-            // Tıklama dinleyicisi
-            onTap = { _, _ ->
-                Toast.makeText(this@ArIlanActivity, "${ilan.baslik} detayları açılıyor...", Toast.LENGTH_SHORT).show()
-                true
-            }
         }
+        sceneView.addChild(modelNode)
 
-        arSceneView.addChild(node)
+        // Model yüklendiğinde bir mesaj verelim
+        Toast.makeText(this, "İlan 3D olarak hazır!", Toast.LENGTH_SHORT).show()
     }
-}
+
+    override fun onPause() {
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+    }
+} // Parantezi unutmadık :)

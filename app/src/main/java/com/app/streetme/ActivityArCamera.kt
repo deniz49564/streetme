@@ -2,84 +2,70 @@ package com.streetme.app
 
 import android.os.Bundle
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.database.*
+import com.google.firebase.firestore.FirebaseFirestore
+import com.streetme.app.models.Product
 import io.github.sceneview.ar.ArSceneView
-import io.github.sceneview.math.Position
-import io.github.sceneview.node.ViewNode
+import io.github.sceneview.ar.node.ArModelNode
+import io.github.sceneview.ar.node.PlacementMode
 
-class ActivityArCamera : AppCompatActivity() {
+class ArCameraActivity : AppCompatActivity() {
 
-    // 'lateinit var' olduğu için buna sadece bir kez atama yapabiliriz.
-    private lateinit var arSceneView: ArSceneView
-    private lateinit var database: DatabaseReference
+    private lateinit var sceneView: ArSceneView
+    private lateinit var statusText: TextView
+    private lateinit var db: FirebaseFirestore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_ar_camera)
 
-        // DÜZELTME 1: Atamayı en sade haliyle yapıyoruz.
-        // Eğer findViewById hata veriyorsa XML'deki ismin 'io.github.sceneview.ar.ArSceneView'
-        // olduğundan emin olun.
-        arSceneView = findViewById(R.id.arSceneView)
+        db = FirebaseFirestore.getInstance()
+        sceneView = findViewById(R.id.sceneView)
+        statusText = findViewById(R.id.statusText)
 
-        // DÜZELTME 2: 'lifecycle = ...' satırı 'val' hatası veriyorsa SİLDİK.
-        // SceneView genellikle bunu arka planda kendisi halleder.
-
-        database = FirebaseDatabase.getInstance().reference.child("ilans")
-        loadIlansFromFirebase()
-
-        findViewById<android.widget.ImageView>(R.id.btn_close_ar).setOnClickListener { finish() }
-    }
-
-    private fun loadIlansFromFirebase() {
-        database.orderByChild("durum").equalTo("aktif").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                // DÜZELTME 3: 'children' listesi temizlenirken hata almamak için güvenli yöntem
-                arSceneView.children.filterIsInstance<ViewNode>().forEach { it.parent = null }
-
-                for (ilanSnapshot in snapshot.children) {
-                    val ilan = ilanSnapshot.getValue(Ilan::class.java)
-                    ilan?.let { addIlanToArWorld(it) }
-                }
-            }
-            override fun onCancelled(error: DatabaseError) {
-                Toast.makeText(this@ActivityArCamera, "Veri yüklenemedi", Toast.LENGTH_SHORT).show()
-            }
-        })
-    }
-
-    private fun addIlanToArWorld(ilan: Ilan) {
-        // DÜZELTME 4: ViewNode constructor parametreleri.
-        // Eğer 'arSceneView.engine' kısmında 'val' hatası varsa,
-        // kütüphane o mülke erişimi kapatmış olabilir.
-        val node = ViewNode(arSceneView.engine).apply {
-
-            // DÜZELTME 5: 'position = ...' satırı hata veriyorsa 'worldPosition' kullanın.
-            // O da hata verirse: position.x = ... şeklinde tek tek atayın.
-            position = Position(
-                x = (Math.random().toFloat() * 4) - 2f,
-                y = 0.5f,
-                z = -3f
-            )
-
-            // DÜZELTME 6: loadView parametrelerini açıkça isimlendiriyoruz.
-            loadView(
-                context = this@ActivityArCamera,
-                layoutResId = R.layout.ar_item_card
-            ) { _, view ->
-                view.findViewById<TextView>(R.id.ar_ilan_title).text = ilan.baslik
-                view.findViewById<TextView>(R.id.ar_ilan_price).text = "${ilan.fiyat} TL"
-            }
-
-            // DÜZELTME 7: onTap parametreleri (_) ile boş geçildi.
-            onTap = { _, _ ->
-                Toast.makeText(this@ActivityArCamera, "${ilan.baslik} tıklandı", Toast.LENGTH_SHORT).show()
-                true
-            }
+        findViewById<android.view.View>(R.id.btn_back_to_map).setOnClickListener {
+            finish()
         }
 
-        arSceneView.addChild(node)
+        // Firestore'daki ilanları AR dünyasına yükle
+        loadProductsToAr()
     }
+
+    private fun loadProductsToAr() {
+        db.collection("products").get().addOnSuccessListener { documents ->
+            for (document in documents) {
+                val product = document.toObject(Product::class.java)
+                place3DModel(product)
+            }
+        }
+    }
+
+    private fun place3DModel(product: Product) {
+        // Her ürün için bir 3D model node'u oluştur
+        val modelNode = ArModelNode(sceneView.engine, PlacementMode.INSTANT).apply {
+            // Şimdilik standart bir model linki kullanıyoruz (Buraya kendi .glb linklerini koyabilirsin)
+            loadModelGlbAsync(
+                glbFileLocation = "https://sceneview.github.io/assets/models/DamagedHelmet.glb",
+                autoAnimate = true,
+                scaleToUnits = 1.0f // 1 metre boyutunda
+            )
+        }
+
+        // TODO: Geospatial API ile koordinat sabitleme burada yapılacak
+        // Şimdilik kameranın önüne 2 metre mesafeye koyuyoruz (Test için)
+        sceneView.addChild(modelNode)
+        statusText.text = "Gebze: ${product.name} tespit edildi!"
+    }
+
+    // ArCameraActivity.kt içindeki bu kısmı değiştir:
+
+    override fun onPause() {
+        super.onPause()
+        // Eğer hata veriyorsa sceneView.pause() satırını tamamen sil
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Eğer hata veriyorsa sceneView.resume() satırını tamamen sil
+       }
 }
